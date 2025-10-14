@@ -32,31 +32,34 @@ use Vyfony\Bundle\FilterableTableBundle\Filter\Configurator\Parameter\Expression
 use Vyfony\Bundle\FilterableTableBundle\Filter\Configurator\Parameter\FilterParameterInterface;
 use Vyfony\Bundle\FilterableTableBundle\Persistence\QueryBuilder\Alias\AliasFactoryInterface;
 use TeamTNT\TNTSearch\TNTSearch;
+use Symfony\Component\HttpKernel\KernelInterface;
 
 final class FullTextFilterParameter implements FilterParameterInterface, ExpressionBuilderInterface
 {
     private TNTSearch $search;
+    private AliasFactoryInterface $aliasFactory;
 
-    public function __construct(AliasFactoryInterface $aliasFactory)
+    public function __construct(AliasFactoryInterface $aliasFactory, KernelInterface $kernel)
     {
         $this->aliasFactory = $aliasFactory;
         $db_url = $_ENV['DATABASE_URL'];
         $db_parameters = parse_url($db_url);
 
         $this->search = new TNTSearch;
+        $projectDir = $kernel->getProjectDir();
         $config = [
             'driver' => $db_parameters["scheme"],
             'host' => $db_parameters["host"],
             'database' => str_replace('/', '', $db_parameters["path"]),
             'username' => $db_parameters["user"],
             'password' => $db_parameters["pass"],
-            'storage' => './',
+            'storage' => $projectDir . '/',
             'stemmer' => \TeamTNT\TNTSearch\Stemmer\RussianStemmer::class,
             'charset' => 'utf8'
         ];
         $this->search->loadConfig($config);
         $this->search->fuzziness = true;
-        $this->search->selectIndex('/thumbs/fulltext.sql');
+        $this->search->selectIndex('var/tnt/fulltext.index');
     }
 
     public function getQueryParameterName(): string
