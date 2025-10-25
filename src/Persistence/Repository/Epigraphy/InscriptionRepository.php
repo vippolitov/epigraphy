@@ -62,4 +62,63 @@ final class InscriptionRepository extends ServiceEntityRepository
 
         return $inscriptions;
     }
+
+    public function getMinimalConventionalDate(): int
+    {
+        $result = $this->createQueryBuilder('i')
+            ->select('i.conventionalDate')
+            ->where('i.isShownOnSite = :shown')
+            ->setParameter('shown', true)
+            ->andWhere('i.conventionalDate IS NOT NULL')
+            ->getQuery()
+            ->getResult();
+
+        $minYear = PHP_INT_MAX;
+
+        foreach ($result as $row) {
+            $date = $row['conventionalDate'];
+            if ($date) {
+                // Extract first year from date string (format: "YYYY" or "YYYY-YYYY")
+                $parts = explode('-', $date);
+                if (isset($parts[0]) && is_numeric($parts[0])) {
+                    $year = (int) $parts[0];
+                    if ($year < $minYear) {
+                        $minYear = $year;
+                    }
+                }
+            }
+        }
+
+        return $minYear === PHP_INT_MAX ? 862 : $minYear;
+    }
+
+    public function getMaximalConventionalDate(): int
+    {
+        $result = $this->createQueryBuilder('i')
+            ->select('i.conventionalDate')
+            ->where('i.isShownOnSite = :shown')
+            ->setParameter('shown', true)
+            ->andWhere('i.conventionalDate IS NOT NULL')
+            ->getQuery()
+            ->getResult();
+
+        $maxYear = 0;
+
+        foreach ($result as $row) {
+            $date = $row['conventionalDate'];
+            if ($date) {
+                // Extract last year from date string (format: "YYYY" or "YYYY-YYYY")
+                $parts = explode('-', $date);
+                $lastPart = end($parts);
+                if (is_numeric($lastPart)) {
+                    $year = (int) $lastPart;
+                    if ($year > $maxYear) {
+                        $maxYear = $year;
+                    }
+                }
+            }
+        }
+
+        return $maxYear === 0 ? 1700 : $maxYear;
+    }
 }
