@@ -31,18 +31,14 @@ use Doctrine\ORM\QueryBuilder;
 use Symfony\Component\Form\Extension\Core\Type\HiddenType;
 use Vyfony\Bundle\FilterableTableBundle\Filter\Configurator\Parameter\ExpressionBuilderInterface;
 use Vyfony\Bundle\FilterableTableBundle\Filter\Configurator\Parameter\FilterParameterInterface;
-use Vyfony\Bundle\FilterableTableBundle\Persistence\QueryBuilder\Alias\AliasFactoryInterface;
 
 final class ConventionalDateFinalYearFilterParameter implements FilterParameterInterface, ExpressionBuilderInterface
 {
-    private AliasFactoryInterface $aliasFactory;
     private InscriptionRepository $inscriptionRepository;
 
     public function __construct(
-        AliasFactoryInterface $aliasFactory,
         InscriptionRepository $inscriptionRepository
     ) {
-        $this->aliasFactory = $aliasFactory;
         $this->inscriptionRepository = $inscriptionRepository;
     }
 
@@ -68,24 +64,9 @@ final class ConventionalDateFinalYearFilterParameter implements FilterParameterI
      */
     public function buildWhereExpression(QueryBuilder $queryBuilder, $formData, string $entityAlias): ?string
     {
-        if (null === $formData) {
-            return null;
-        }
-
-        $conventionalDateFinalYear = (string) $formData;
-
-        // Right part (final year) is:
-        // - if dash exists: last 4 chars after dash
-        // - else: same as initial 4 chars
-        // Using DQL: COALESCE(SUBSTRING(%s.conventionalDate, LOCATE('-', %s.conventionalDate)+1, 4), SUBSTRING(%s.conventionalDate, 1, 4))
-        $paramName = $entityAlias.'_conventional_date_max';
-        $queryBuilder->setParameter($paramName, $conventionalDateFinalYear);
-
-        return sprintf(
-            'COALESCE(SUBSTRING(%1$s.conventionalDate, LOCATE(\'-\', %1$s.conventionalDate)+1, 4), SUBSTRING(%1$s.conventionalDate, 1, 4)) <= :%2$s',
-            $entityAlias,
-            $paramName
-        );
+        // All date filtering logic is handled in ConventionalDateInitialYearFilterParameter
+        // This parameter only provides the form field and default value
+        return null;
     }
 }
 

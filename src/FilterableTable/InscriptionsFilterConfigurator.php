@@ -126,7 +126,7 @@ final class InscriptionsFilterConfigurator extends AbstractFilterConfigurator
     public function createSubmitButtonOptions(): array
     {
         return [
-            'attr' => ['class' => 'btn btn-primary'],
+            'attr' => ['class' => 'btn btn-secondary'],
             'label' => 'controller.inscription.list.filter.submitButton',
         ];
     }

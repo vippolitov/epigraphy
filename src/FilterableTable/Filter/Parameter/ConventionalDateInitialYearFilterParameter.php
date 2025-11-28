@@ -29,21 +29,21 @@ use App\Persistence\Repository\Epigraphy\InscriptionRepository;
 use Doctrine\ORM\EntityManager;
 use Doctrine\ORM\QueryBuilder;
 use Symfony\Component\Form\Extension\Core\Type\HiddenType;
+use Symfony\Component\HttpFoundation\RequestStack;
 use Vyfony\Bundle\FilterableTableBundle\Filter\Configurator\Parameter\ExpressionBuilderInterface;
 use Vyfony\Bundle\FilterableTableBundle\Filter\Configurator\Parameter\FilterParameterInterface;
-use Vyfony\Bundle\FilterableTableBundle\Persistence\QueryBuilder\Alias\AliasFactoryInterface;
 
 final class ConventionalDateInitialYearFilterParameter implements FilterParameterInterface, ExpressionBuilderInterface
 {
-    private AliasFactoryInterface $aliasFactory;
     private InscriptionRepository $inscriptionRepository;
+    private RequestStack $requestStack;
 
     public function __construct(
-        AliasFactoryInterface $aliasFactory,
-        InscriptionRepository $inscriptionRepository
+        InscriptionRepository $inscriptionRepository,
+        RequestStack $requestStack
     ) {
-        $this->aliasFactory = $aliasFactory;
         $this->inscriptionRepository = $inscriptionRepository;
+        $this->requestStack = $requestStack;
     }
 
     public function getQueryParameterName(): string
@@ -72,18 +72,113 @@ final class ConventionalDateInitialYearFilterParameter implements FilterParamete
             return null;
         }
 
-        $conventionalDateInitialYear = (string) $formData;
+        $request = $this->requestStack->getCurrentRequest();
+        if (!$request) {
+            return null;
+        }
 
-        // Use DQL functions SUBSTRING/LOCATE and compare numerically via DB implicit casting
-        // Left part (initial year) is first 4 characters
-        $paramName = $entityAlias.'_conventional_date_min';
-        $queryBuilder->setParameter($paramName, $conventionalDateInitialYear);
+        $conventionalDateInitialYear = (int) $formData;
+        $conventionalDateFinalYear = (int) $request->query->get('conventionalDateFinalYear', $conventionalDateInitialYear);
+        
+        // When checkbox is checked, it sends value="1", when unchecked it sends nothing
+        $exactMatchParam = $request->query->get('conventionalDateExactMatch');
+        $isExactMatch = $exactMatchParam === '1' || $exactMatchParam === 1;
 
-        return sprintf(
-            'SUBSTRING(%s.conventionalDate, 1, 4) >= :%s',
-            $entityAlias,
-            $paramName
+        // Use application-side filtering for robust parsing of diverse date formats
+        $entityManager = $queryBuilder->getEntityManager();
+        $connection = $entityManager->getConnection();
+
+        // Debug - write to a file we can easily find
+        $debugPath = __DIR__ . '/../../../../../../var/log/date_filter_debug.log';
+        $debugMsg = sprintf(
+            "[%s] Range: %d-%d, ExactMatch param: '%s', IsExact: %s, QueryString: %s\n",
+            date('Y-m-d H:i:s'),
+            $conventionalDateInitialYear,
+            $conventionalDateFinalYear,
+            var_export($exactMatchParam, true),
+            $isExactMatch ? 'YES' : 'NO',
+            $request->getQueryString()
         );
+        @file_put_contents($debugPath, $debugMsg, FILE_APPEND);
+
+        // Fetch all candidate inscriptions (ids and dates)
+        $sql = 'SELECT id, conventional_date FROM inscription WHERE is_shown_on_site = 1 AND conventional_date IS NOT NULL';
+        $rows = $connection->executeQuery($sql)->fetchAllAssociative();
+
+        $matchingIds = [];
+
+        foreach ($rows as $row) {
+            $raw = (string) $row['conventional_date'];
+            $clean = mb_strtolower($raw);
+            // Remove textual prefixes and brackets (keep original separators)
+            $clean = preg_replace('/^\s*(після\s*|после\s*)/u', '', $clean);
+            $clean = str_replace(['[', ']'], '', $clean);
+
+            // Extract 3-4 digit year tokens robustly (handles en-dash, spaces, concatenations)
+            $matches = [];
+            preg_match_all('/\d{3,4}/u', $clean, $matches);
+
+            $startYear = null;
+            $endYear = null;
+
+            if (!empty($matches[0])) {
+                // Use the first two tokens in order if available, otherwise single token
+                $first = isset($matches[0][0]) ? (int) $matches[0][0] : null;
+                $second = isset($matches[0][1]) ? (int) $matches[0][1] : null;
+
+                if (null !== $first && $first > 0) {
+                    $startYear = $first;
+                    $endYear = $first;
+                }
+
+                if (null !== $second && $second > 0) {
+                    $endYear = $second;
+                }
+            }
+
+            if (null === $startYear || null === $endYear) {
+                continue; // skip invalid
+            }
+
+            // Discard obviously invalid intervals (end before start)
+            if ($endYear < $startYear) {
+                continue;
+            }
+
+            $matches = false;
+            if ($startYear === $endYear) {
+                // Exact year: inclusive bounds in both modes
+                $matches = ($startYear >= $conventionalDateInitialYear) && ($endYear <= $conventionalDateFinalYear);
+            } else {
+                if ($isExactMatch) {
+                    // Strict: fully inside filter, exclude borders per spec
+                    $matches = ($startYear > $conventionalDateInitialYear) && ($endYear < $conventionalDateFinalYear);
+                } else {
+                    // Non-strict (per spec): an endpoint must lie strictly inside the filter range
+                    // Note: intervals that completely cover the filter (both endpoints outside) do NOT match
+                    $matches = (
+                        ($startYear > $conventionalDateInitialYear && $startYear < $conventionalDateFinalYear) ||
+                        ($endYear > $conventionalDateInitialYear && $endYear < $conventionalDateFinalYear)
+                    );
+                }
+            }
+
+            if ($matches) {
+                $matchingIds[] = (int) $row['id'];
+            }
+        }
+
+        // Debug: report sample of computed ranges
+        $debugMsg = sprintf("Computed matching IDs: %s\n", json_encode(array_slice($matchingIds, 0, 50)));
+        @file_put_contents($debugPath, $debugMsg, FILE_APPEND);
+        
+        // If no matches, return a condition that will never match
+        if (empty($matchingIds)) {
+            return $entityAlias . '.id = 0';
+        }
+        
+        // Return the IN condition with matching IDs as a string
+        return (string) $queryBuilder->expr()->in($entityAlias . '.id', $matchingIds);
     }
 }
 

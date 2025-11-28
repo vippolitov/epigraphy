@@ -78,8 +78,14 @@ final class InscriptionRepository extends ServiceEntityRepository
         foreach ($result as $row) {
             $date = $row['conventionalDate'];
             if ($date) {
+                // Clean the date: remove brackets, "после" prefix
+                $cleaned = preg_replace('/[\[\]]/', '', $date);
+                $cleaned = preg_replace('/^після\s*/ui', '', $cleaned);
+                $cleaned = preg_replace('/^после\s*/ui', '', $cleaned);
+                $cleaned = trim($cleaned);
+                
                 // Extract first year from date string (format: "YYYY" or "YYYY-YYYY")
-                $parts = explode('-', $date);
+                $parts = explode('-', $cleaned);
                 if (isset($parts[0]) && is_numeric($parts[0])) {
                     $year = (int) $parts[0];
                     if ($year < $minYear) {
@@ -107,8 +113,14 @@ final class InscriptionRepository extends ServiceEntityRepository
         foreach ($result as $row) {
             $date = $row['conventionalDate'];
             if ($date) {
+                // Clean the date: remove brackets, "после" prefix
+                $cleaned = preg_replace('/[\[\]]/', '', $date);
+                $cleaned = preg_replace('/^після\s*/ui', '', $cleaned);
+                $cleaned = preg_replace('/^после\s*/ui', '', $cleaned);
+                $cleaned = trim($cleaned);
+                
                 // Extract last year from date string (format: "YYYY" or "YYYY-YYYY")
-                $parts = explode('-', $date);
+                $parts = explode('-', $cleaned);
                 $lastPart = end($parts);
                 if (is_numeric($lastPart)) {
                     $year = (int) $lastPart;
