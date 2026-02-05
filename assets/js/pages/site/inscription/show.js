@@ -374,7 +374,7 @@ function renderTableView(xmlDoc, stubDoc = null) {
     const stubBibliographyMap = stubDoc ? parseBibliography(stubDoc) : null;
     
     // Initial bracket system (default: Leiden = false in toggle)
-    let currentSystem = 'leiden';
+    let currentSystem = getEpidocSystemPreference();
 
     function renderContent() {
         // Render for table widget (if exists)
@@ -438,11 +438,35 @@ function renderTableView(xmlDoc, stubDoc = null) {
     
     function handleToggleChange(e) {
         currentSystem = e.target.checked ? 'zaliznyak' : 'leiden';
+        setEpidocSystemPreference(currentSystem);
         renderContent();
     }
     
     // Initial render
     renderContent();
+}
+
+function getEpidocSystemPreference() {
+    const value = readCookie('epidoc_system');
+    if (value === 'zaliznyak' || value === 'leiden') {
+        return value;
+    }
+    return 'leiden';
+}
+
+function setEpidocSystemPreference(system) {
+    setCookie('epidoc_system', system, 365);
+}
+
+function readCookie(name) {
+    const match = document.cookie.match(new RegExp('(?:^|; )' + name + '=([^;]*)'));
+    return match ? decodeURIComponent(match[1]) : null;
+}
+
+function setCookie(name, value, days) {
+    const date = new Date();
+    date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
+    document.cookie = `${name}=${encodeURIComponent(value)}; expires=${date.toUTCString()}; path=/`;
 }
 
 function extractTranslations(xmlDoc) {
