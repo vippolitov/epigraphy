@@ -239,170 +239,269 @@ $(window).on('load', () => {
  */
 function initEpidocViewer() {
     const dataScript = document.getElementById('epidoc-data');
-    if (!dataScript) return;
+    const stubScript = document.getElementById('epidoc-stub-data');
+    const tableContainer = document.getElementById('epidoc-text-in-table');
+    const tableApparatusContainer = document.getElementById('epidoc-apparatus-in-table');
+    if (!dataScript) {
+        // If no data but table container exists, show placeholder
+        if (tableContainer) {
+            tableContainer.innerHTML = '<span style="color: #6c757d; font-style: italic;">EpiDoc данные отсутствуют</span>';
+        }
+        if (tableApparatusContainer) {
+            tableApparatusContainer.innerHTML = '<span style="color: #6c757d; font-style: italic;">EpiDoc данные отсутствуют</span>';
+        }
+        return;
+    }
     
     const xmlString = dataScript.textContent;
+    const stubString = stubScript ? stubScript.textContent : '';
     const parser = new DOMParser();
     const xmlDoc = parser.parseFromString(xmlString, 'text/xml');
+    const stubDoc = stubString ? parser.parseFromString(stubString, 'text/xml') : null;
     
     // Check for parsing errors
     const parseError = xmlDoc.querySelector('parsererror');
     if (parseError) {
         console.error('EpiDoc XML parsing error:', parseError.textContent);
+        if (tableContainer) {
+            tableContainer.innerHTML = '<span style="color: #dc3545; font-style: italic;">Ошибка парсинга XML</span>';
+        }
+        if (tableApparatusContainer) {
+            tableApparatusContainer.innerHTML = '<span style="color: #dc3545; font-style: italic;">Ошибка парсинга XML</span>';
+        }
         return;
     }
-    
-    // Render both views
-    renderRenderedView(xmlDoc);
-    renderSourceView(xmlString);
-    
-    // Setup tab switching
-    setupTabs();
-    
-    // Setup copy button
-    setupCopyButton(xmlString);
+
+    renderTableView(xmlDoc, stubDoc);
+}
+
+function getFirstByTagName(parent, tagName) {
+    if (!parent) {
+        return null;
+    }
+    const elements = parent.getElementsByTagName(tagName);
+    return elements.length > 0 ? elements[0] : null;
+}
+
+function getTextBody(xmlDoc) {
+    const textElement = getFirstByTagName(xmlDoc, 'text');
+    return getFirstByTagName(textElement, 'body');
+}
+
+function getDivsByType(parent, type) {
+    if (!parent) {
+        return [];
+    }
+    const divs = parent.getElementsByTagName('div');
+    const result = [];
+    for (let i = 0; i < divs.length; i++) {
+        if (divs[i].getAttribute('type') === type) {
+            result.push(divs[i]);
+        }
+    }
+    return result;
+}
+
+function extractAppElements(xmlDoc) {
+    if (!xmlDoc) {
+        return [];
+    }
+    const textBody = getTextBody(xmlDoc);
+    const editions = getDivsByType(textBody, 'edition');
+    const edition = editions.length > 0 ? editions[0] : null;
+    if (!edition) {
+        return [];
+    }
+    return Array.from(edition.getElementsByTagName('app'));
+}
+
+function extractExternalApparatusText(xmlDoc) {
+    if (!xmlDoc) {
+        return '';
+    }
+    const textBody = getTextBody(xmlDoc);
+    const apparatusDivs = getDivsByType(textBody, 'apparatus');
+    if (apparatusDivs.length === 0) {
+        return '';
+    }
+    return apparatusDivs[0].textContent.trim();
+}
+
+function renderApparatusIntoContainer(container, xmlDoc, bibliographyMap, system) {
+    if (!container || !xmlDoc) {
+        return false;
+    }
+    const appElements = extractAppElements(xmlDoc);
+    if (appElements.length === 0) {
+        const externalText = extractExternalApparatusText(xmlDoc);
+        if (!externalText) {
+            return false;
+        }
+        container.innerHTML = `
+            <table class="apparatus-table">
+                <tbody>
+                    <tr>
+                        <td class="apparatus-lem-cell">—</td>
+                        <td class="apparatus-rdg-cell">${escapeHtml(externalText)}</td>
+                    </tr>
+                </tbody>
+            </table>`;
+        return true;
+    }
+    const rows = buildCriticalApparatusRows(appElements, bibliographyMap, system).trim();
+    if (!rows) {
+        return false;
+    }
+    container.innerHTML = `
+        <table class="apparatus-table">
+            <tbody>
+                ${rows}
+            </tbody>
+        </table>`;
+    return true;
 }
 
 /**
  * Render the structured/formatted view of the EpiDoc
  */
-function renderRenderedView(xmlDoc) {
-    const container = document.getElementById('epidoc-rendered');
-    if (!container) return;
+function renderTableView(xmlDoc, stubDoc = null) {
+    const tableContainer = document.getElementById('epidoc-text-in-table');
+    const tableApparatusContainer = document.getElementById('epidoc-apparatus-in-table');
+    const tableTranslationsContainer = document.getElementById('epidoc-translations-in-table');
     
     // Parse bibliography map
     const bibliographyMap = parseBibliography(xmlDoc);
+    const stubBibliographyMap = stubDoc ? parseBibliography(stubDoc) : null;
     
     // Initial bracket system (default: Leiden = false in toggle)
     let currentSystem = 'leiden';
 
     function renderContent() {
-        let html = '';
-        
-        // Header/Metadata section - disabled
-        // const teiHeader = xmlDoc.querySelector('teiHeader');
-        // if (teiHeader) {
-        //     html += renderHeaderSection(teiHeader);
-        // }
-        
-        // Text body sections
-        const textBody = xmlDoc.querySelector('text > body');
-        if (textBody) {
-            // Edition (main text)
-            const edition = textBody.querySelector('div[type="edition"]');
-            if (edition) {
-                html += renderEditionSection(edition, currentSystem);
-            }
-            
-            // Critical Apparatus - collect all <app> elements from edition
-            if (edition) {
-                const appElements = edition.querySelectorAll('app');
-                if (appElements.length > 0) {
-                    html += renderCriticalApparatusTable(appElements, bibliographyMap, currentSystem);
+        // Render for table widget (if exists)
+        if (tableContainer || tableApparatusContainer || tableTranslationsContainer) {
+            const textBody = getTextBody(xmlDoc);
+            if (textBody) {
+                const editions = getDivsByType(textBody, 'edition');
+                const edition = editions.length > 0 ? editions[0] : null;
+                if (edition) {
+                    if (tableContainer) {
+                        let textContent = renderEditionContent(edition, currentSystem);
+                        textContent = textContent.trim().replace(/\s+/g, ' ');
+                        tableContainer.innerHTML = textContent;
+                    }
+                    if (tableApparatusContainer) {
+                        const rendered = renderApparatusIntoContainer(tableApparatusContainer, xmlDoc, bibliographyMap, currentSystem)
+                            || renderApparatusIntoContainer(tableApparatusContainer, stubDoc, stubBibliographyMap, currentSystem);
+                        if (!rendered) {
+                            tableApparatusContainer.innerHTML = '<span style="color: #6c757d; font-style: italic;">Критический аппарат не найден в XML</span>';
+                        }
+                    }
+                    if (tableTranslationsContainer) {
+                        const rendered = renderTranslationsIntoContainer(tableTranslationsContainer, xmlDoc, bibliographyMap)
+                            || renderTranslationsIntoContainer(tableTranslationsContainer, stubDoc, stubBibliographyMap);
+                        if (!rendered) {
+                            tableTranslationsContainer.innerHTML = '<span style="color: #6c757d; font-style: italic;">Переводы не найдены в XML</span>';
+                        }
+                    }
+                } else {
+                    if (tableContainer) {
+                        tableContainer.innerHTML = '<span style="color: #6c757d; font-style: italic;">Секция edition не найдена в XML</span>';
+                    }
+                    if (tableApparatusContainer) {
+                        tableApparatusContainer.innerHTML = '<span style="color: #6c757d; font-style: italic;">Секция edition не найдена в XML</span>';
+                    }
+                    if (tableTranslationsContainer) {
+                        tableTranslationsContainer.innerHTML = '<span style="color: #6c757d; font-style: italic;">Секция edition не найдена в XML</span>';
+                    }
+                }
+            } else {
+                if (tableContainer) {
+                    tableContainer.innerHTML = '<span style="color: #6c757d; font-style: italic;">Секция body не найдена в XML</span>';
+                }
+                if (tableApparatusContainer) {
+                    tableApparatusContainer.innerHTML = '<span style="color: #6c757d; font-style: italic;">Секция body не найдена в XML</span>';
+                }
+                if (tableTranslationsContainer) {
+                    tableTranslationsContainer.innerHTML = '<span style="color: #6c757d; font-style: italic;">Секция body не найдена в XML</span>';
                 }
             }
-    
-            // Translations
-            const translations = textBody.querySelectorAll('div[type="translation"]');
-            if (translations.length > 0) {
-                html += renderTranslationsSection(translations, bibliographyMap);
+            
+            // Re-attach event listener to toggle in table
+            const tableToggle = document.querySelector('.epidoc-toggle-input-table');
+            if (tableToggle) {
+                tableToggle.checked = currentSystem === 'zaliznyak';
+                tableToggle.removeEventListener('change', handleToggleChange);
+                tableToggle.addEventListener('change', handleToggleChange);
             }
         }
-        
-        container.innerHTML = html;
-        
-        // Re-attach event listener to toggle after re-rendering
-        const toggle = document.querySelector('.epidoc-toggle-input');
-        if (toggle) {
-            toggle.checked = currentSystem === 'zaliznyak';
-            toggle.addEventListener('change', (e) => {
-                currentSystem = e.target.checked ? 'zaliznyak' : 'leiden';
-                renderContent();
-            });
-        }
+    }
+    
+    function handleToggleChange(e) {
+        currentSystem = e.target.checked ? 'zaliznyak' : 'leiden';
+        renderContent();
     }
     
     // Initial render
     renderContent();
 }
 
+function extractTranslations(xmlDoc) {
+    if (!xmlDoc) {
+        return [];
+    }
+    const textBody = getTextBody(xmlDoc);
+    return getDivsByType(textBody, 'translation');
+}
+
+function renderTranslationsIntoContainer(container, xmlDoc, bibliographyMap) {
+    if (!container || !xmlDoc) {
+        return false;
+    }
+    const translations = extractTranslations(xmlDoc);
+    if (!translations.length) {
+        return false;
+    }
+    const isCollapsible = translations.length > 1;
+    let items = '';
+    translations.forEach((trans, index) => {
+        const lang = trans.getAttribute('xml:lang') || 'unknown';
+        const resp = trans.getAttribute('resp') || '';
+        const text = trans.textContent.trim();
+        const resolvedResp = resolveResp(resp, bibliographyMap);
+        const langBadge = `<span class="epidoc-lang-badge">${escapeHtml(lang)}</span>`;
+        const respBadge = resolvedResp ? `<span class="epidoc-resp-badge">${escapeHtml(resolvedResp)}</span>` : '';
+        const toggleBtn = isCollapsible && index === 0
+            ? `<button type="button" class="epidoc-translations-toggle" aria-expanded="false" title="Показать все переводы"></button>`
+            : '';
+        items += `
+            <div class="epidoc-translation-line">
+                <span class="epidoc-translation-text">${escapeHtml(text)}</span>
+                ${respBadge}${langBadge}${toggleBtn}
+            </div>`;
+    });
+    const blockClass = isCollapsible
+        ? 'epidoc-translations-block epidoc-translations-block--collapsible epidoc-translations-block--collapsed'
+        : 'epidoc-translations-block';
+    container.innerHTML = `<div class="${blockClass}">${items}</div>`;
+    if (isCollapsible) {
+        const toggle = container.querySelector('.epidoc-translations-toggle');
+        const block = container.querySelector('.epidoc-translations-block');
+        if (toggle && block) {
+            toggle.addEventListener('click', () => {
+                const isCollapsed = block.classList.contains('epidoc-translations-block--collapsed');
+                block.classList.toggle('epidoc-translations-block--collapsed', !isCollapsed);
+                toggle.setAttribute('aria-expanded', String(isCollapsed));
+                toggle.classList.toggle('epidoc-translations-toggle--open', isCollapsed);
+                toggle.title = isCollapsed ? 'Скрыть переводы' : 'Показать все переводы';
+            });
+        }
+    }
+    return true;
+}
+
 /**
  * Render header/metadata section
  */
-function renderHeaderSection(teiHeader) {
-    const title = getTextContent(teiHeader, 'titleStmt > title');
-    const repository = getTextContent(teiHeader, 'repository');
-    const idno = getTextContent(teiHeader, 'msIdentifier > idno');
-    const origPlace = getTextContent(teiHeader, 'origPlace');
-    const origDate = getTextContent(teiHeader, 'origDate');
-    const provenance = getTextContent(teiHeader, 'provenance[type="found"]');
-    const genre = getTextContent(teiHeader, 'keywords[scheme="#genre"] > term');
-    const technique = getTextContent(teiHeader, 'keywords[scheme="#technique"] > term');
-    const preservation = getTextContent(teiHeader, 'keywords[scheme="#preservation"] > term');
-    
-    let metaItems = '';
-    
-    if (title) metaItems += createMetaItem('Title', title);
-    if (repository) metaItems += createMetaItem('Repository', repository);
-    if (idno) metaItems += createMetaItem('Inventory №', idno);
-    if (origPlace) metaItems += createMetaItem('Origin', origPlace);
-    if (origDate) metaItems += createMetaItem('Date', origDate);
-    if (genre) metaItems += createMetaItem('Genre', genre);
-    if (technique) metaItems += createMetaItem('Technique', technique);
-    if (preservation) metaItems += createMetaItem('Preservation', preservation);
-    
-    let html = `
-        <div class="epidoc-section epidoc-section--header">
-            <h4 class="epidoc-section-title">📋 Metadata</h4>
-            <div class="epidoc-metadata-grid">
-                ${metaItems}
-            </div>`;
-    
-    if (provenance) {
-        html += `
-            <div style="margin-top: 1rem;">
-                <span class="epidoc-meta-label">Provenance</span>
-                <p style="margin: 0.5rem 0 0 0; color: #c9d1d9;">${escapeHtml(provenance.trim())}</p>
-            </div>`;
-    }
-    
-    html += '</div>';
-    return html;
-}
-
-function createMetaItem(label, value) {
-    return `
-        <div class="epidoc-metadata-item">
-            <span class="epidoc-meta-label">${label}</span>
-            <span class="epidoc-meta-value">${escapeHtml(value.trim())}</span>
-        </div>`;
-}
-
-/**
- * Render the edition (main text) section
- */
-function renderEditionSection(edition, system = 'leiden') {
-    let textContent = renderEditionContent(edition, system);
-    // Clean up: trim and collapse multiple spaces
-    textContent = textContent.trim().replace(/\s+/g, ' ');
-    
-    return `
-        <div class="epidoc-section epidoc-section--edition">
-            <div class="epidoc-section-header">
-                <h4 class="epidoc-section-title">Текст</h4>
-                <div class="epidoc-toggle-wrapper">
-                    <span class="epidoc-toggle-label epidoc-toggle-label--left">Лейденская система</span>
-                    <label class="epidoc-toggle">
-                        <input type="checkbox" class="epidoc-toggle-input" ${system === 'zaliznyak' ? 'checked' : ''} />
-                        <span class="epidoc-toggle-slider"></span>
-                    </label>
-                    <span class="epidoc-toggle-label epidoc-toggle-label--right">Система Зализняка</span>
-                </div>
-            </div>
-            <div class="epidoc-edition-text">${textContent}</div>
-        </div>`;
-}
-
 /**
  * Bracket Systems Configuration
  */
@@ -514,45 +613,10 @@ function renderApparatus(appNode, system) {
     </span>`;
 }
 
-/**
- * Render translations section
- */
-function renderTranslationsSection(translations, bibliographyMap) {
-    let items = '';
-    
-    translations.forEach(trans => {
-        const lang = trans.getAttribute('xml:lang') || 'unknown';
-        const resp = trans.getAttribute('resp') || '';
-        const text = trans.textContent.trim();
-        
-        const langBadge = `<span class="epidoc-lang-badge">${lang}</span>`;
-        
-        const resolvedResp = resolveResp(resp, bibliographyMap);
-        const respBadge = resolvedResp ? `<span class="epidoc-resp-badge">${escapeHtml(resolvedResp)}</span>` : '';
-        
-        items += `
-            <div class="epidoc-translation-line">
-                <span class="epidoc-translation-text">${escapeHtml(text)}</span>
-                ${respBadge}${langBadge}
-            </div>`;
-    });
-    
-    return `
-        <div class="epidoc-section epidoc-section--translation">
-            <h4 class="epidoc-section-title">Переводы</h4>
-            <div class="epidoc-translations-block">
-                ${items}
-            </div>
-        </div>`;
-}
-
-/**
- * Render critical apparatus as a table
- */
-function renderCriticalApparatusTable(appElements, bibliographyMap, system) {
+function buildCriticalApparatusRows(appElements, bibliographyMap, system) {
     let rows = '';
-    
-    appElements.forEach((app, index) => {
+    for (let i = 0; i < appElements.length; i++) {
+        const app = appElements[i];
         const lem = app.querySelector('lem');
         const readings = app.querySelectorAll('rdg');
         
@@ -562,14 +626,15 @@ function renderCriticalApparatusTable(appElements, bibliographyMap, system) {
         
         // Build alternative readings
         let alternatives = [];
-        readings.forEach(rdg => {
+        for (let j = 0; j < readings.length; j++) {
+            const rdg = readings[j];
             const rdgText = getPlainText(rdg, system);
             const rdgResp = rdg.getAttribute('resp') || '';
             alternatives.push({
                 text: rdgText,
                 resp: rdgResp
             });
-        });
+        }
         
         // Create row
         const lemDisplay = escapeHtml(lemText);
@@ -585,19 +650,13 @@ function renderCriticalApparatusTable(appElements, bibliographyMap, system) {
                 <td class="apparatus-lem-cell">${lemDisplay}</td>
                 <td class="apparatus-rdg-cell">${altDisplay}</td>
             </tr>`;
-    });
-    
-    return `
-        <div class="epidoc-section epidoc-section--apparatus">
-            <h4 class="epidoc-section-title">Критический аппарат</h4>
-            <table class="apparatus-table">
-                <tbody>
-                    ${rows}
-                </tbody>
-            </table>
-        </div>`;
+    }
+    return rows;
 }
 
+/**
+ * Render critical apparatus as a table
+ */
 /**
  * Get plain text content from an element (recursively, handling supplied elements)
  */
@@ -621,25 +680,6 @@ function getPlainText(node, system = 'leiden') {
     }
     
     return result.trim();
-}
-
-/**
- * Render a simple section (apparatus, commentary, bibliography)
- */
-function renderSimpleSection(element, type, title) {
-    const iconMap = {
-        'apparatus': '📝',
-        'commentary': '💬',
-        'bibliography': '📚'
-    };
-    const icon = iconMap[type] || '📄';
-    const content = element.textContent.trim();
-    
-    return `
-        <div class="epidoc-section epidoc-section--${type}">
-            <h4 class="epidoc-section-title">${icon} ${title}</h4>
-            <p style="margin: 0; color: #212529;">${escapeHtml(content)}</p>
-        </div>`;
 }
 
 /**

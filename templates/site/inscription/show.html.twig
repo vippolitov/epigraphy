@@ -62,6 +62,9 @@
             {{ self.format_text_row(translationContext, 'dateExplanation', inscription.dateExplanation) }}
             {{ self.format_text_row(translationContext, 'comment', inscription.comment) }}
             {{ self.format_literature(translationContext, inscription) }}
+            {{ self.format_epidoc_text_row(translationContext, 'epidocText') }}
+            {{ self.format_epidoc_apparatus_row(translationContext, 'epidocCriticalApparatus') }}
+            {{ self.format_epidoc_translations_row(translationContext, 'epidocTranslations') }}
         </tbody>
     </table>
     {% if is_granted('ROLE_ADMIN') %}
@@ -75,48 +78,7 @@
         </div>
     {% endif %}
 
-    {# EpiDoc Viewer Section #}
-    <div class="epidoc-viewer-section">
-        <h3 class="epidoc-viewer-title">
-            <span class="epidoc-icon">⟨⟩</span>
-            EpiDoc XML
-        </h3>
-        
-        <div class="epidoc-viewer-container">
-            {# Tabs for different views #}
-            <div class="epidoc-tabs">
-                <button class="epidoc-tab active" data-tab="rendered">
-                    <span class="tab-icon">📜</span>
-                    Rendered View
-                </button>
-                <button class="epidoc-tab" data-tab="source">
-                    <span class="tab-icon">🔤</span>
-                    XML Source
-                </button>
-            </div>
-            
-            {# Rendered View #}
-            <div class="epidoc-content epidoc-content--rendered active" data-content="rendered">
-                <div class="epidoc-rendered" id="epidoc-rendered">
-                    {# JavaScript will populate this #}
-                </div>
-            </div>
-            
-            {# Source View #}
-            <div class="epidoc-content epidoc-content--source" data-content="source">
-                <div class="epidoc-source-wrapper">
-                    <button class="epidoc-copy-btn" title="Copy to clipboard">
-                        <span class="copy-icon">📋</span>
-                        Copy
-                    </button>
-                    <pre class="epidoc-source" id="epidoc-source"></pre>
-                </div>
-            </div>
-        </div>
-    </div>
-    
-    {# EpiDoc XML Data (example) #}
-    <script id="epidoc-data" type="application/xml">
+    {% set epidocStubXml %}
 <TEI xml:space="preserve" xml:lang="or" xmlns="http://www.tei-c.org/ns/1.0">
     <teiHeader>
         <fileDesc>
@@ -242,6 +204,14 @@
         </body>
     </text>
 </TEI>
+    {% endset %}
+
+    {# EpiDoc XML Data - moved here to ensure it loads before JS initialization #}
+    <script id="epidoc-data" type="application/xml">
+{{ epidocStubXml|raw }}
+    </script>
+    <script id="epidoc-stub-data" type="application/xml">
+{{ epidocStubXml|raw }}
     </script>
 
     {{ include('site/inscription/_photoswipe_layout.html.twig') }}
@@ -417,4 +387,73 @@
     {% import _self as self %}
 
     {{- self.format_zero_row(inscription, 'translation', 'translation')|default('-') -}}
+{%- endmacro -%}
+
+{%- macro format_epidoc_text_row(translationContext, labelTranslationKey) -%}
+    {% import _self as self %}
+
+    <tr>
+        <th scope="row">
+            {{ self.translate_field_label(translationContext, labelTranslationKey) }}
+            <div class="epidoc-toggle-wrapper" style="margin-top: 0.5rem; justify-content: flex-start; font-weight: normal;">
+                <span class="epidoc-toggle-label epidoc-toggle-label--left" style="font-size: 0.75rem;">Лейденская система</span>
+                <label class="epidoc-toggle" style="margin: 0 0.25rem;">
+                    <input type="checkbox" class="epidoc-toggle-input epidoc-toggle-input-table" />
+                    <span class="epidoc-toggle-slider"></span>
+                </label>
+                <span class="epidoc-toggle-label epidoc-toggle-label--right" style="font-size: 0.75rem;">Система Зализняка</span>
+            </div>
+        </th>
+        <td>
+            <div id="epidoc-text-in-table" style="font-family: 'Monomachus', 'Georgia', serif; font-size: 1.1rem; line-height: 1.8; color: #212529; white-space: pre-wrap;">
+                {# JavaScript will populate this #}
+            </div>
+        </td>
+    </tr>
+{%- endmacro -%}
+
+{%- macro format_epidoc_apparatus_row(translationContext, labelTranslationKey) -%}
+    {% import _self as self %}
+
+    <tr>
+        <th scope="row">
+            {{ self.translate_field_label(translationContext, labelTranslationKey) }}
+        </th>
+        <td>
+            <div id="epidoc-apparatus-in-table">
+                {# JavaScript will populate this #}
+            </div>
+        </td>
+    </tr>
+{%- endmacro -%}
+
+{%- macro format_epidoc_translations_row(translationContext, labelTranslationKey) -%}
+    {% import _self as self %}
+
+    <tr>
+        <th scope="row">
+            {{ self.translate_field_label(translationContext, labelTranslationKey) }}
+        </th>
+        <td>
+            <div id="epidoc-translations-in-table">
+                {# JavaScript will populate this #}
+            </div>
+        </td>
+    </tr>
+{%- endmacro -%}
+
+{%- macro format_epidoc_text_content() -%}
+    <div class="epidoc-section epidoc-section--edition" style="margin: 0; padding: 0; background: transparent; border: none;">
+        <div id="epidoc-text-in-table" style="margin-bottom: 0.5rem; font-family: 'Monomachus', 'Georgia', serif; font-size: 1.1rem; line-height: 1.8; color: #212529; white-space: pre-wrap;">
+            {# JavaScript will populate this #}
+        </div>
+        <div class="epidoc-toggle-wrapper" style="margin-top: 0.5rem; justify-content: flex-start;">
+            <span class="epidoc-toggle-label epidoc-toggle-label--left" style="font-size: 0.75rem;">Лейденская система</span>
+            <label class="epidoc-toggle" style="margin: 0 0.25rem;">
+                <input type="checkbox" class="epidoc-toggle-input epidoc-toggle-input-table" />
+                <span class="epidoc-toggle-slider"></span>
+            </label>
+            <span class="epidoc-toggle-label epidoc-toggle-label--right" style="font-size: 0.75rem;">Система Зализняка</span>
+        </div>
+    </div>
 {%- endmacro -%}

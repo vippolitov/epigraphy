@@ -1,0 +1,114 @@
+<TEI xml:space="preserve" xml:lang="or" xmlns="http://www.tei-c.org/ns/1.0">
+    <teiHeader>
+        <fileDesc>
+            <titleStmt>
+                <title>title of document</title>
+            </titleStmt>
+            <publicationStmt>
+                <authority/>
+                <idno type="filename"/>
+            </publicationStmt>
+            <sourceDesc>
+                <msDesc>
+                    <msIdentifier>
+                        <repository>museum/archive</repository>
+                        <idno>inventory number</idno>
+                    </msIdentifier>
+                    <physDesc>
+                        <objectDesc>
+                            <supportDesc>
+                                <support>description of object/monument (likely to include <material/>
+                                    and <objectType/> information, <dimensions/>, etc.)</support>
+                            </supportDesc>
+                            <layoutDesc>
+                                <layout>description of text field/campus</layout>
+                            </layoutDesc>
+                        </objectDesc>
+                        <handDesc>
+                            <handNote>description of letters, possibly including <height>letter-heights</height>
+                            </handNote>
+                        </handDesc>
+                    </physDesc>
+                    <history>
+                        <origin>
+                            <origPlace>Place of origin</origPlace>
+                            <origDate>Date of origin</origDate>
+                        </origin>
+                        <provenance type="found"> Надпись обнаружена в приделе Михаила, справа от южного портала собора.
+                        </provenance>
+                        <provenance type="observed">Modern location(s) (if different from repository, above)
+                        </provenance>
+                    </history>
+                </msDesc>
+                <listBibl>
+                    <bibl xml:id="Kor">Корниенко 2015б</bibl>
+                    <bibl xml:id="Vys">Высоцкий 1985</bibl>
+                    <bibl xml:id="Tur">Турилов 2000</bibl>
+                </listBibl>
+            </sourceDesc>
+        </fileDesc>
+        <profileDesc>
+            <textClass>
+                <keywords scheme="#genre">
+                    <term>молитва</term>
+                </keywords>
+                <keywords scheme="#technique">
+                    <term key="graffito">граффито</term> 
+                </keywords>
+                <keywords scheme="#preservation">
+                    <term key="50">50%</term>
+                </keywords>
+            </textClass>
+        </profileDesc>
+    </teiHeader>
+    <facsimile>
+        <graphic url="path/to/photograph_of_text_or_monument"/>
+    </facsimile>
+    <text>
+        <body>
+            <div type="edition" xml:space="preserve">
+                 <ab>
+          Ги҃ помози рабу
+          <app>
+            <lem resp="#ed">своему</lem>
+            <rdg resp="#Vys">своиму</rdg>
+          </app>
+          Ил
+          <supplied reason="lost">ье</supplied>
+          <app>
+            <lem resp="#ed">на прот
+              <supplied reason="lost">ивьнꙑ</supplied>
+            </lem>
+            <rdg resp="#Vys">а про Т
+              <supplied reason="editorial">и</supplied>рънѣ
+            </rdg>
+            <rdg resp="#Tur">на прот
+              <supplied reason="editorial">и</supplied>въне
+            </rdg>
+            <rdg resp="#Kor">на противънъ</rdg>
+          </app>
+        </ab>
+            </div>
+            <div type="apparatus">
+                <p>external apparatus criticus (if applicable)</p>
+            </div>
+      <div type="translation" xml:lang="ru">
+        <p>Господи, помоги рабу своему Илье против врагов.</p>
+      </div>
+      <div type="translation" resp="#Kor" xml:lang="uk">
+        <p>Господи, поможи рабу своєму Іллі на ворожих.</p>
+      </div>
+      <div type="translation" resp="#Vys" xml:lang="ru">
+        <p>Господи, помоги рабу своему Илье на [день памяти Федора] Тирена</p>
+      <div type="translation" resp="#Tur" xml:lang="ru">
+        <p>Господи, помоги рабу своему Илье на противников.
+      </div>
+            <div type="commentary">
+                <p>commentary</p>
+            </div>
+            <div type="bibliography">
+                <p>bibliography of previous editions, discussion, etc.</p>
+            </div>
+        </body>
+    </text>
+</TEI>
