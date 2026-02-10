@@ -386,7 +386,7 @@ function renderTableView(xmlDoc, stubDoc = null) {
                 if (edition) {
                     if (tableContainer) {
                         let textContent = renderEditionContent(edition, currentSystem);
-                        textContent = textContent.trim().replace(/\s+/g, ' ');
+                        textContent = normalizeEditionHtml(textContent);
                         tableContainer.innerHTML = textContent;
                     }
                     if (tableApparatusContainer) {
@@ -533,13 +533,15 @@ const BRACKET_SYSTEMS = {
     leiden: {
         supplied: {
             editorial: ['⟨', '⟩'],
-            lost: ['[', ']']
+            lost: ['[', ']'],
+            unclear: ['[', ']']
         }
     },
     zaliznyak: {
         supplied: {
             editorial: ['[', ']'],
-            lost: ['(', ')']
+            lost: ['(', ')'],
+            unclear: ['[', ']']
         }
     }
 };
@@ -550,10 +552,41 @@ const BRACKET_SYSTEMS = {
 function renderEditionContent(node, system = 'leiden') {
     let result = '';
     
-    for (const child of node.childNodes) {
+    for (let index = 0; index < node.childNodes.length; index++) {
+        const child = node.childNodes[index];
         if (child.nodeType === Node.TEXT_NODE) {
-            // Normalize whitespace: collapse multiple spaces/newlines into single space
-            const text = child.textContent.replace(/\s+/g, ' ');
+            // Normalize whitespace and avoid extra spaces near inline <app> inside words.
+            let text = child.textContent.replace(/\s+/g, ' ');
+            if (!text.trim()) {
+                const prevElementForGap = getSiblingElement(node.childNodes, index, -1);
+                const nextElementForGap = getSiblingElement(node.childNodes, index, 1);
+                if (prevElementForGap && prevElementForGap.localName === 'supplied'
+                    && nextElementForGap && nextElementForGap.localName === 'app'
+                    && !/\s$/.test(result)) {
+                    result += ' ';
+                }
+                continue;
+            }
+            const prevElement = getSiblingElement(node.childNodes, index, -1);
+            const nextElement = getSiblingElement(node.childNodes, index, 1);
+            const hadLeadingWhitespace = /^\s/.test(text);
+            const hadTrailingWhitespace = /\s$/.test(text);
+
+            if (prevElement && prevElement.localName === 'app') {
+                text = text.replace(/^\s+/, '');
+                if (hadLeadingWhitespace && !startsWithLowercaseLetter(text)) {
+                    text = ` ${text}`;
+                }
+            }
+            if (nextElement && nextElement.localName === 'app') {
+                const textWithoutTail = text.replace(/\s+$/, '');
+                const lastToken = textWithoutTail.split(/\s+/).pop() || '';
+                if (!hadTrailingWhitespace || lastToken.length <= 2) {
+                    text = textWithoutTail;
+                } else {
+                    text = `${textWithoutTail} `;
+                }
+            }
             result += escapeHtml(text);
         } else if (child.nodeType === Node.ELEMENT_NODE) {
             const tagName = child.localName;
@@ -561,6 +594,15 @@ function renderEditionContent(node, system = 'leiden') {
             switch (tagName) {
                 case 'supplied':
                     const reason = child.getAttribute('reason') || 'lost';
+                    if (reason === 'unclear') {
+                        const unclearSuppliedContent = renderEditionContent(child, system);
+                        if (system === 'zaliznyak') {
+                            result += `<span class="epidoc-supplied" title="Supplied: ${reason}">[${unclearSuppliedContent}]</span>`;
+                        } else {
+                            result += `<span class="epidoc-unclear epidoc-unclear--leiden" title="Unclear reading">${unclearSuppliedContent}</span>`;
+                        }
+                        break;
+                    }
                     // For HTML rendering (edition text), we use data attributes and CSS/JS to handle display
                     // But brackets might be part of content for simple text extraction
                     const suppliedClass = reason === 'editorial' 
@@ -583,20 +625,24 @@ function renderEditionContent(node, system = 'leiden') {
                     break;
                     
                 case 'lb':
-                    const lineNum = child.getAttribute('n');
-                    if (lineNum) {
-                        result += `<span class="epidoc-line-number" title="Line ${lineNum}">${lineNum}</span> `;
+                    if (!result.endsWith('<br />')) {
+                        result += '<br />';
                     }
-                    result += '\n';
                     break;
                     
                 case 'gap':
                     const extent = child.getAttribute('extent') || '?';
-                    result += `<span class="epidoc-gap" title="Gap: ${extent}">[...]</span>`;
+                    const gapMarker = system === 'zaliznyak' ? '...' : '***';
+                    result += `<span class="epidoc-gap" title="Gap: ${extent}">${gapMarker}</span>`;
                     break;
                     
                 case 'unclear':
-                    result += `<span class="epidoc-unclear" title="Unclear reading">${renderEditionContent(child, system)}</span>`;
+                    const unclearContent = renderEditionContent(child, system);
+                    if (system === 'zaliznyak') {
+                        result += `[${unclearContent}]`;
+                    } else {
+                        result += `<span class="epidoc-unclear epidoc-unclear--leiden" title="Unclear reading">${unclearContent}</span>`;
+                    }
                     break;
                     
                 case 'lem':
@@ -612,6 +658,28 @@ function renderEditionContent(node, system = 'leiden') {
     }
     
     return result;
+}
+
+function getSiblingElement(childNodes, startIndex, direction) {
+    let index = startIndex + direction;
+    while (index >= 0 && index < childNodes.length) {
+        const sibling = childNodes[index];
+        if (sibling.nodeType === Node.ELEMENT_NODE) {
+            return sibling;
+        }
+        index += direction;
+    }
+    return null;
+}
+
+function startsWithLowercaseLetter(text) {
+    return /^\p{Ll}/u.test(text);
+}
+
+function normalizeEditionHtml(html) {
+    return html
+        .replace(/^(?:<br\s*\/?>\s*)+/i, '')
+        .trim();
 }
 
 /**
@@ -631,10 +699,7 @@ function renderApparatus(appNode, system) {
         readingsHtml += `<span class="epidoc-rdg">${renderEditionContent(rdg, system)} ${respLabel}</span>`;
     });
     
-    return `<span class="epidoc-app">
-        <span class="epidoc-lem" title="Click to see variant readings">${lemContent}</span>
-        <span class="epidoc-readings">${readingsHtml}</span>
-    </span>`;
+    return `<span class="epidoc-app"><span class="epidoc-lem" title="Click to see variant readings">${lemContent}</span><span class="epidoc-readings">${readingsHtml}</span></span>`;
 }
 
 function buildCriticalApparatusRows(appElements, bibliographyMap, system) {
@@ -695,8 +760,26 @@ function getPlainText(node, system = 'leiden') {
             
             if (tagName === 'supplied') {
                 const reason = child.getAttribute('reason') || 'lost';
+                if (reason === 'unclear') {
+                    const unclearSuppliedText = getPlainText(child, system);
+                    if (system === 'zaliznyak') {
+                        result += `[${unclearSuppliedText}]`;
+                    } else {
+                        result += applyDotBelowMarks(unclearSuppliedText);
+                    }
+                    continue;
+                }
                 const brackets = BRACKET_SYSTEMS[system].supplied[reason] || BRACKET_SYSTEMS[system].supplied.lost;
                 result += brackets[0] + getPlainText(child, system) + brackets[1];
+            } else if (tagName === 'unclear') {
+                const unclearText = getPlainText(child, system);
+                if (system === 'zaliznyak') {
+                    result += `[${unclearText}]`;
+                } else {
+                    result += applyDotBelowMarks(unclearText);
+                }
+            } else if (tagName === 'gap') {
+                result += system === 'zaliznyak' ? '...' : '***';
             } else {
                 result += getPlainText(child, system);
             }
@@ -704,6 +787,18 @@ function getPlainText(node, system = 'leiden') {
     }
     
     return result.trim();
+}
+
+function applyDotBelowMarks(text) {
+    let result = '';
+    for (const char of text) {
+        if (/\s/.test(char)) {
+            result += char;
+        } else {
+            result += `${char}\u0323`;
+        }
+    }
+    return result;
 }
 
 /**

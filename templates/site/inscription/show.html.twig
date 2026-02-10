@@ -62,9 +62,11 @@
             {{ self.format_text_row(translationContext, 'dateExplanation', inscription.dateExplanation) }}
             {{ self.format_text_row(translationContext, 'comment', inscription.comment) }}
             {{ self.format_literature(translationContext, inscription) }}
-            {{ self.format_epidoc_text_row(translationContext, 'epidocText') }}
-            {{ self.format_epidoc_apparatus_row(translationContext, 'epidocCriticalApparatus') }}
-            {{ self.format_epidoc_translations_row(translationContext, 'epidocTranslations') }}
+            {% if epidocXml is not empty %}
+                {{ self.format_epidoc_text_row(translationContext, 'epidocText') }}
+                {{ self.format_epidoc_apparatus_row(translationContext, 'epidocCriticalApparatus') }}
+                {{ self.format_epidoc_translations_row(translationContext, 'epidocTranslations') }}
+            {% endif %}
         </tbody>
     </table>
     {% if is_granted('ROLE_ADMIN') %}
@@ -78,6 +80,7 @@
         </div>
     {% endif %}
 
+    {% if epidocXml is not empty %}
     {% set epidocStubXml %}
 <TEI xml:space="preserve" xml:lang="or" xmlns="http://www.tei-c.org/ns/1.0">
     <teiHeader>
@@ -208,11 +211,12 @@
 
     {# EpiDoc XML Data - moved here to ensure it loads before JS initialization #}
     <script id="epidoc-data" type="application/xml">
-{{ epidocStubXml|raw }}
+{{ epidocXml|raw }}
     </script>
     <script id="epidoc-stub-data" type="application/xml">
 {{ epidocStubXml|raw }}
     </script>
+    {% endif %}
 
     {{ include('site/inscription/_photoswipe_layout.html.twig') }}
 {% endblock %}
