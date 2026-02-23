@@ -70,7 +70,7 @@ final class BuildFulltextIndexCommand extends Command
         $indexer = $tnt->createIndex('fulltext.index');
         $indexer->setPrimaryKey('id');
 
-        // Build comprehensive searchable content from all inscription-related tables
+        // Build comprehensive searchable content from base fields + localized_text translations.
         $indexer->query(<<<SQL
 SELECT
   inscription.id,
@@ -106,12 +106,63 @@ SELECT
     carrier.stratigraphical_date,
     carrier.material_description,
     carrier.carrier_history,
-    carrier.storage_localization
+    carrier.storage_localization,
+    interpretation_content.content,
+    localized_inscription.content,
+    localized_carrier.content,
+    localized_zero_row.content,
+    localized_interpretation.content
   ) AS content
 FROM inscription 
-INNER JOIN carrier ON inscription.carrier_id = carrier.id 
-INNER JOIN zero_row ON inscription.zero_row_id = zero_row.id 
-INNER JOIN interpretation ON inscription.id = interpretation.inscription_id
+LEFT JOIN carrier ON inscription.carrier_id = carrier.id 
+LEFT JOIN zero_row ON inscription.zero_row_id = zero_row.id
+LEFT JOIN (
+    SELECT i.inscription_id,
+           GROUP_CONCAT(
+               CONCAT_WS(' ',
+                   i.comment,
+                   i.place_on_carrier,
+                   i.text,
+                   i.translation,
+                   i.transliteration,
+                   i.description,
+                   i.date_in_text,
+                   i.non_stratigraphical_date,
+                   i.reconstruction,
+                   i.normalization,
+                   i.interpretation_comment,
+                   i.origin
+               )
+               SEPARATOR ' '
+           ) AS content
+    FROM interpretation i
+    GROUP BY i.inscription_id
+) interpretation_content ON interpretation_content.inscription_id = inscription.id
+LEFT JOIN (
+    SELECT target_id, GROUP_CONCAT(value SEPARATOR ' ') AS content
+    FROM localized_text
+    WHERE target_type = 'inscription'
+    GROUP BY target_id
+) localized_inscription ON localized_inscription.target_id = inscription.id
+LEFT JOIN (
+    SELECT target_id, GROUP_CONCAT(value SEPARATOR ' ') AS content
+    FROM localized_text
+    WHERE target_type = 'carrier'
+    GROUP BY target_id
+) localized_carrier ON localized_carrier.target_id = carrier.id
+LEFT JOIN (
+    SELECT target_id, GROUP_CONCAT(value SEPARATOR ' ') AS content
+    FROM localized_text
+    WHERE target_type = 'zero_row'
+    GROUP BY target_id
+) localized_zero_row ON localized_zero_row.target_id = zero_row.id
+LEFT JOIN (
+    SELECT i.inscription_id, GROUP_CONCAT(lt.value SEPARATOR ' ') AS content
+    FROM localized_text lt
+    INNER JOIN interpretation i ON i.id = lt.target_id
+    WHERE lt.target_type = 'interpretation'
+    GROUP BY i.inscription_id
+) localized_interpretation ON localized_interpretation.inscription_id = inscription.id
 SQL);
 
         $indexer->run();
@@ -121,5 +172,4 @@ SQL);
         return Command::SUCCESS;
     }
 }
-
 
