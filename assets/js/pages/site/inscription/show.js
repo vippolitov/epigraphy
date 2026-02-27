@@ -242,7 +242,8 @@ function initEpidocViewer() {
     const stubScript = document.getElementById('epidoc-stub-data');
     const tableContainer = document.getElementById('epidoc-text-in-table');
     const tableApparatusContainer = document.getElementById('epidoc-apparatus-in-table');
-    const tableReadingsContainer = document.getElementById('epidoc-readings-in-table');
+    const fullReadingsContainer = document.getElementById('epidoc-full-readings-in-text');
+    const fullReadingsToggle = document.getElementById('epidoc-full-readings-toggle');
     const serverEditionContainer = document.querySelector('[data-epidoc-render-source="xslt"]');
 
     if (serverEditionContainer) {
@@ -257,8 +258,13 @@ function initEpidocViewer() {
         if (tableApparatusContainer) {
             tableApparatusContainer.innerHTML = '<span style="color: #6c757d; font-style: italic;">EpiDoc данные отсутствуют</span>';
         }
-        if (tableReadingsContainer) {
-            tableReadingsContainer.innerHTML = '<span style="color: #6c757d; font-style: italic;">EpiDoc данные отсутствуют</span>';
+        if (fullReadingsContainer) {
+            fullReadingsContainer.innerHTML = '';
+        }
+        if (fullReadingsToggle) {
+            fullReadingsToggle.hidden = true;
+            fullReadingsToggle.setAttribute('aria-expanded', 'false');
+            fullReadingsToggle.classList.remove('epidoc-translations-toggle--open');
         }
         return;
     }
@@ -279,8 +285,13 @@ function initEpidocViewer() {
         if (tableApparatusContainer) {
             tableApparatusContainer.innerHTML = '<span style="color: #dc3545; font-style: italic;">Ошибка парсинга XML</span>';
         }
-        if (tableReadingsContainer) {
-            tableReadingsContainer.innerHTML = '<span style="color: #dc3545; font-style: italic;">Ошибка парсинга XML</span>';
+        if (fullReadingsContainer) {
+            fullReadingsContainer.innerHTML = '';
+        }
+        if (fullReadingsToggle) {
+            fullReadingsToggle.hidden = true;
+            fullReadingsToggle.setAttribute('aria-expanded', 'false');
+            fullReadingsToggle.classList.remove('epidoc-translations-toggle--open');
         }
         return;
     }
@@ -569,7 +580,8 @@ function renderTableView(xmlDoc, stubDoc = null) {
     const tableContainer = document.getElementById('epidoc-text-in-table');
     const tableApparatusContainer = document.getElementById('epidoc-apparatus-in-table');
     const tableTranslationsContainer = document.getElementById('epidoc-translations-in-table');
-    const tableReadingsContainer = document.getElementById('epidoc-readings-in-table');
+    const fullReadingsContainer = document.getElementById('epidoc-full-readings-in-text');
+    const fullReadingsToggle = document.getElementById('epidoc-full-readings-toggle');
     
     // Parse bibliography map
     const bibliographyMap = parseBibliography(xmlDoc);
@@ -577,10 +589,34 @@ function renderTableView(xmlDoc, stubDoc = null) {
     
     // Initial bracket system (default: Leiden = false in toggle)
     let currentSystem = getEpidocSystemPreference();
+    let readingsToggleBound = false;
+
+    function setupReadingsToggle() {
+        if (!fullReadingsToggle || !fullReadingsContainer || readingsToggleBound) {
+            return;
+        }
+        readingsToggleBound = true;
+
+        fullReadingsToggle.addEventListener('click', () => {
+            const isExpanded = fullReadingsToggle.getAttribute('aria-expanded') === 'true';
+            const nextExpanded = !isExpanded;
+            const showTitle = fullReadingsContainer.dataset.showReadingsTitle || 'Показать все прочтения';
+            const hideTitle = fullReadingsContainer.dataset.hideReadingsTitle || 'Скрыть прочтения';
+
+            fullReadingsToggle.setAttribute('aria-expanded', String(nextExpanded));
+            fullReadingsToggle.classList.toggle('epidoc-translations-toggle--open', nextExpanded);
+            fullReadingsToggle.title = nextExpanded ? hideTitle : showTitle;
+
+            const block = fullReadingsContainer.querySelector('.epidoc-alt-readings-block');
+            if (block) {
+                block.classList.toggle('epidoc-alt-readings-block--collapsed', !nextExpanded);
+            }
+        });
+    }
 
     function renderContent() {
         // Render for table widget (if exists)
-        if (tableContainer || tableApparatusContainer || tableTranslationsContainer || tableReadingsContainer) {
+        if (tableContainer || tableApparatusContainer || tableTranslationsContainer || fullReadingsContainer) {
             const textBody = getTextBody(xmlDoc);
             if (textBody) {
                 const editions = getDivsByType(textBody, 'edition');
@@ -606,11 +642,27 @@ function renderTableView(xmlDoc, stubDoc = null) {
                             tableTranslationsContainer.innerHTML = '<span style="color: #6c757d; font-style: italic;">Переводы не найдены в XML</span>';
                         }
                     }
-                    if (tableReadingsContainer) {
-                        const rendered = renderReadingsIntoContainer(tableReadingsContainer, xmlDoc, bibliographyMap, currentSystem)
-                            || renderReadingsIntoContainer(tableReadingsContainer, stubDoc, stubBibliographyMap, currentSystem);
+                    if (fullReadingsContainer) {
+                        const rendered = renderReadingsIntoContainer(
+                            fullReadingsContainer,
+                            fullReadingsToggle,
+                            xmlDoc,
+                            bibliographyMap,
+                            currentSystem
+                        ) || renderReadingsIntoContainer(
+                            fullReadingsContainer,
+                            fullReadingsToggle,
+                            stubDoc,
+                            stubBibliographyMap,
+                            currentSystem
+                        );
                         if (!rendered) {
-                            tableReadingsContainer.innerHTML = '<span style="color: #6c757d; font-style: italic;">Прочтения не найдены в XML</span>';
+                            fullReadingsContainer.innerHTML = '';
+                            if (fullReadingsToggle) {
+                                fullReadingsToggle.hidden = true;
+                                fullReadingsToggle.setAttribute('aria-expanded', 'false');
+                                fullReadingsToggle.classList.remove('epidoc-translations-toggle--open');
+                            }
                         }
                     }
                 } else {
@@ -623,8 +675,13 @@ function renderTableView(xmlDoc, stubDoc = null) {
                     if (tableTranslationsContainer) {
                         tableTranslationsContainer.innerHTML = '<span style="color: #6c757d; font-style: italic;">Секция edition не найдена в XML</span>';
                     }
-                    if (tableReadingsContainer) {
-                        tableReadingsContainer.innerHTML = '<span style="color: #6c757d; font-style: italic;">Секция edition не найдена в XML</span>';
+                    if (fullReadingsContainer) {
+                        fullReadingsContainer.innerHTML = '';
+                        if (fullReadingsToggle) {
+                            fullReadingsToggle.hidden = true;
+                            fullReadingsToggle.setAttribute('aria-expanded', 'false');
+                            fullReadingsToggle.classList.remove('epidoc-translations-toggle--open');
+                        }
                     }
                 }
             } else {
@@ -637,8 +694,13 @@ function renderTableView(xmlDoc, stubDoc = null) {
                 if (tableTranslationsContainer) {
                     tableTranslationsContainer.innerHTML = '<span style="color: #6c757d; font-style: italic;">Секция body не найдена в XML</span>';
                 }
-                if (tableReadingsContainer) {
-                    tableReadingsContainer.innerHTML = '<span style="color: #6c757d; font-style: italic;">Секция body не найдена в XML</span>';
+                if (fullReadingsContainer) {
+                    fullReadingsContainer.innerHTML = '';
+                    if (fullReadingsToggle) {
+                        fullReadingsToggle.hidden = true;
+                        fullReadingsToggle.setAttribute('aria-expanded', 'false');
+                        fullReadingsToggle.classList.remove('epidoc-translations-toggle--open');
+                    }
                 }
             }
             
@@ -658,6 +720,8 @@ function renderTableView(xmlDoc, stubDoc = null) {
         renderContent();
     }
     
+    setupReadingsToggle();
+
     // Initial render
     renderContent();
 }
@@ -1079,29 +1143,25 @@ function formatReadingTextForHtml(text) {
     return escapeHtml(text).replace(/\n/g, '<br>');
 }
 
-function buildReadingsRows(editionDiv, bibliographyMap, system, baseReaderLabel) {
-    let rows = '';
-    const witnesses = [null, ...collectWitnessRespValues(editionDiv)];
+function buildFullReadingsEntries(editionDiv, bibliographyMap, system) {
+    const entries = [];
+    const witnesses = collectWitnessRespValues(editionDiv);
 
     for (let i = 0; i < witnesses.length; i++) {
         const witnessResp = witnesses[i];
-        const reader = witnessResp ? (resolveResp(witnessResp, bibliographyMap) || witnessResp) : baseReaderLabel;
+        const reader = resolveResp(witnessResp, bibliographyMap) || witnessResp;
         const readingText = normalizeWitnessReadingText(buildWitnessReadingText(editionDiv, system, witnessResp));
         if (!readingText) {
             continue;
         }
 
-        rows += `
-            <tr>
-                <td class="apparatus-lem-cell">${escapeHtml(reader)}</td>
-                <td class="apparatus-rdg-cell">${formatReadingTextForHtml(readingText)}</td>
-            </tr>`;
+        entries.push({ reader, text: readingText });
     }
 
-    return rows;
+    return entries;
 }
 
-function renderReadingsIntoContainer(container, xmlDoc, bibliographyMap, system) {
+function renderReadingsIntoContainer(container, toggle, xmlDoc, bibliographyMap, system) {
     if (!container || !xmlDoc) {
         return false;
     }
@@ -1111,31 +1171,39 @@ function renderReadingsIntoContainer(container, xmlDoc, bibliographyMap, system)
         return false;
     }
 
-    const appElements = editionDiv.getElementsByTagName('app');
-    if (appElements.length === 0) {
+    if (editionDiv.getElementsByTagName('app').length === 0) {
         return false;
     }
 
-    const baseReaderLabel = container.dataset.baseReaderLabel || 'Main reading';
-    const rows = buildReadingsRows(editionDiv, bibliographyMap, system, baseReaderLabel).trim();
-    if (!rows) {
+    const entries = buildFullReadingsEntries(editionDiv, bibliographyMap, system);
+    if (!entries.length) {
         return false;
     }
 
-    const readerLabel = container.dataset.readerLabel || 'Reader';
-    const readingLabel = container.dataset.readingLabel || 'Reading';
-    container.innerHTML = `
-        <table class="apparatus-table">
-            <thead>
-                <tr>
-                    <th scope="col">${escapeHtml(readerLabel)}</th>
-                    <th scope="col">${escapeHtml(readingLabel)}</th>
-                </tr>
-            </thead>
-            <tbody>
-                ${rows}
-            </tbody>
-        </table>`;
+    const isExpanded = !!(toggle && toggle.getAttribute('aria-expanded') === 'true');
+
+    let items = '';
+    for (let i = 0; i < entries.length; i++) {
+        const entry = entries[i];
+        items += `
+            <div class="epidoc-reading-line">
+                <span class="epidoc-resp-badge">${escapeHtml(entry.reader)}</span>
+                <div class="epidoc-alt-reading-text">${formatReadingTextForHtml(entry.text)}</div>
+            </div>`;
+    }
+
+    const blockClass = isExpanded
+        ? 'epidoc-alt-readings-block'
+        : 'epidoc-alt-readings-block epidoc-alt-readings-block--collapsed';
+
+    container.innerHTML = `<div class="${blockClass}">${items}</div>`;
+    if (toggle) {
+        const showTitle = container.dataset.showReadingsTitle || 'Показать все прочтения';
+        const hideTitle = container.dataset.hideReadingsTitle || 'Скрыть прочтения';
+        toggle.hidden = false;
+        toggle.classList.toggle('epidoc-translations-toggle--open', isExpanded);
+        toggle.title = isExpanded ? hideTitle : showTitle;
+    }
 
     return true;
 }
