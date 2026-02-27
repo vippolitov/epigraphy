@@ -66,6 +66,7 @@
                 {{ self.format_epidoc_text_row(translationContext, 'epidocText', epidocRendered|default(null), epidocRenderMode|default('legacy_js')) }}
                 {{ self.format_epidoc_apparatus_row(translationContext, 'epidocCriticalApparatus') }}
                 {{ self.format_epidoc_translations_row(translationContext, 'epidocTranslations') }}
+                {{ self.format_epidoc_readings_spoiler_row(translationContext) }}
             {% endif %}
         </tbody>
     </table>
@@ -450,6 +451,39 @@
         <td>
             <div id="epidoc-translations-in-table">
                 {# JavaScript will populate this #}
+            </div>
+        </td>
+    </tr>
+{%- endmacro -%}
+
+{%- macro format_epidoc_readings_spoiler_row(translationContext) -%}
+    <tr>
+        <td colspan="2" class="eomr-blocked-cell">
+            <div data-spoiler-container class="eomr-spoiler-container hidden">
+                <details>
+                    <summary class="eomr-spoiler-button">
+                        <span class="toggler-text open-spoiler">{{ 'readingsSpoiler.close'|transWithContext(translationContext) }}</span>
+                        <span class="toggler-text closed-spoiler">{{ 'readingsSpoiler.open'|transWithContext(translationContext) }}</span>
+                    </summary>
+                    <div class="eomr-spoiler-content-wrapper">
+                        <table class="table table-bordered">
+                            <tbody>
+                                <tr>
+                                    <td colspan="2">
+                                        <div
+                                            id="epidoc-readings-in-table"
+                                            data-reader-label="{{ 'inscription.label.readingsTable.reader'|transWithContext(translationContext) }}"
+                                            data-reading-label="{{ 'inscription.label.readingsTable.reading'|transWithContext(translationContext) }}"
+                                            data-base-reader-label="{{ 'inscription.label.readingsTable.baseReader'|transWithContext(translationContext) }}"
+                                        >
+                                            {# JavaScript will populate this #}
+                                        </div>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </details>
             </div>
         </td>
     </tr>

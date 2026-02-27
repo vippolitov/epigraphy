@@ -242,6 +242,7 @@ function initEpidocViewer() {
     const stubScript = document.getElementById('epidoc-stub-data');
     const tableContainer = document.getElementById('epidoc-text-in-table');
     const tableApparatusContainer = document.getElementById('epidoc-apparatus-in-table');
+    const tableReadingsContainer = document.getElementById('epidoc-readings-in-table');
     const serverEditionContainer = document.querySelector('[data-epidoc-render-source="xslt"]');
 
     if (serverEditionContainer) {
@@ -255,6 +256,9 @@ function initEpidocViewer() {
         }
         if (tableApparatusContainer) {
             tableApparatusContainer.innerHTML = '<span style="color: #6c757d; font-style: italic;">EpiDoc данные отсутствуют</span>';
+        }
+        if (tableReadingsContainer) {
+            tableReadingsContainer.innerHTML = '<span style="color: #6c757d; font-style: italic;">EpiDoc данные отсутствуют</span>';
         }
         return;
     }
@@ -274,6 +278,9 @@ function initEpidocViewer() {
         }
         if (tableApparatusContainer) {
             tableApparatusContainer.innerHTML = '<span style="color: #dc3545; font-style: italic;">Ошибка парсинга XML</span>';
+        }
+        if (tableReadingsContainer) {
+            tableReadingsContainer.innerHTML = '<span style="color: #dc3545; font-style: italic;">Ошибка парсинга XML</span>';
         }
         return;
     }
@@ -500,6 +507,15 @@ function extractAppElements(xmlDoc) {
     return Array.from(edition.getElementsByTagName('app'));
 }
 
+function extractEditionDiv(xmlDoc) {
+    if (!xmlDoc) {
+        return null;
+    }
+    const textBody = getTextBody(xmlDoc);
+    const editions = getDivsByType(textBody, 'edition');
+    return editions.length > 0 ? editions[0] : null;
+}
+
 function extractExternalApparatusText(xmlDoc) {
     if (!xmlDoc) {
         return '';
@@ -553,6 +569,7 @@ function renderTableView(xmlDoc, stubDoc = null) {
     const tableContainer = document.getElementById('epidoc-text-in-table');
     const tableApparatusContainer = document.getElementById('epidoc-apparatus-in-table');
     const tableTranslationsContainer = document.getElementById('epidoc-translations-in-table');
+    const tableReadingsContainer = document.getElementById('epidoc-readings-in-table');
     
     // Parse bibliography map
     const bibliographyMap = parseBibliography(xmlDoc);
@@ -563,7 +580,7 @@ function renderTableView(xmlDoc, stubDoc = null) {
 
     function renderContent() {
         // Render for table widget (if exists)
-        if (tableContainer || tableApparatusContainer || tableTranslationsContainer) {
+        if (tableContainer || tableApparatusContainer || tableTranslationsContainer || tableReadingsContainer) {
             const textBody = getTextBody(xmlDoc);
             if (textBody) {
                 const editions = getDivsByType(textBody, 'edition');
@@ -589,6 +606,13 @@ function renderTableView(xmlDoc, stubDoc = null) {
                             tableTranslationsContainer.innerHTML = '<span style="color: #6c757d; font-style: italic;">Переводы не найдены в XML</span>';
                         }
                     }
+                    if (tableReadingsContainer) {
+                        const rendered = renderReadingsIntoContainer(tableReadingsContainer, xmlDoc, bibliographyMap, currentSystem)
+                            || renderReadingsIntoContainer(tableReadingsContainer, stubDoc, stubBibliographyMap, currentSystem);
+                        if (!rendered) {
+                            tableReadingsContainer.innerHTML = '<span style="color: #6c757d; font-style: italic;">Прочтения не найдены в XML</span>';
+                        }
+                    }
                 } else {
                     if (tableContainer) {
                         tableContainer.innerHTML = '<span style="color: #6c757d; font-style: italic;">Секция edition не найдена в XML</span>';
@@ -598,6 +622,9 @@ function renderTableView(xmlDoc, stubDoc = null) {
                     }
                     if (tableTranslationsContainer) {
                         tableTranslationsContainer.innerHTML = '<span style="color: #6c757d; font-style: italic;">Секция edition не найдена в XML</span>';
+                    }
+                    if (tableReadingsContainer) {
+                        tableReadingsContainer.innerHTML = '<span style="color: #6c757d; font-style: italic;">Секция edition не найдена в XML</span>';
                     }
                 }
             } else {
@@ -609,6 +636,9 @@ function renderTableView(xmlDoc, stubDoc = null) {
                 }
                 if (tableTranslationsContainer) {
                     tableTranslationsContainer.innerHTML = '<span style="color: #6c757d; font-style: italic;">Секция body не найдена в XML</span>';
+                }
+                if (tableReadingsContainer) {
+                    tableReadingsContainer.innerHTML = '<span style="color: #6c757d; font-style: italic;">Секция body не найдена в XML</span>';
                 }
             }
             
@@ -927,6 +957,187 @@ function buildCriticalApparatusRows(appElements, bibliographyMap, system) {
             </tr>`;
     }
     return rows;
+}
+
+function splitRespValues(resp) {
+    if (!resp) {
+        return [];
+    }
+    return resp.trim().split(/\s+/).filter(Boolean);
+}
+
+function collectWitnessRespValues(editionDiv) {
+    const values = new Set();
+    if (!editionDiv) {
+        return [];
+    }
+
+    const appElements = editionDiv.getElementsByTagName('app');
+    for (let i = 0; i < appElements.length; i++) {
+        const readings = appElements[i].getElementsByTagName('rdg');
+        for (let j = 0; j < readings.length; j++) {
+            const respValues = splitRespValues(readings[j].getAttribute('resp') || '');
+            respValues.forEach(resp => values.add(resp));
+        }
+    }
+
+    return Array.from(values);
+}
+
+function pickWitnessReading(appNode, witnessResp) {
+    const lem = appNode.querySelector('lem');
+    const readings = appNode.querySelectorAll('rdg');
+
+    if (!witnessResp) {
+        return lem || (readings.length > 0 ? readings[0] : null);
+    }
+
+    for (let i = 0; i < readings.length; i++) {
+        const rdgRespValues = splitRespValues(readings[i].getAttribute('resp') || '');
+        if (rdgRespValues.includes(witnessResp)) {
+            return readings[i];
+        }
+    }
+
+    return lem || (readings.length > 0 ? readings[0] : null);
+}
+
+function buildWitnessReadingText(node, system, witnessResp) {
+    let result = '';
+
+    for (const child of node.childNodes) {
+        if (child.nodeType === Node.TEXT_NODE) {
+            result += child.textContent.replace(/\s+/g, ' ');
+            continue;
+        }
+
+        if (child.nodeType !== Node.ELEMENT_NODE) {
+            continue;
+        }
+
+        const tagName = child.localName;
+        if (tagName === 'app') {
+            const selectedReading = pickWitnessReading(child, witnessResp);
+            if (selectedReading) {
+                result += buildWitnessReadingText(selectedReading, system, witnessResp);
+            }
+            continue;
+        }
+
+        if (tagName === 'supplied') {
+            const reason = child.getAttribute('reason') || 'lost';
+            if (reason === 'unclear') {
+                const unclearSuppliedText = buildWitnessReadingText(child, system, witnessResp);
+                if (system === 'zaliznyak') {
+                    result += `[${unclearSuppliedText}]`;
+                } else {
+                    result += applyDotBelowMarks(unclearSuppliedText);
+                }
+                continue;
+            }
+
+            const brackets = BRACKET_SYSTEMS[system].supplied[reason] || BRACKET_SYSTEMS[system].supplied.lost;
+            result += `${brackets[0]}${buildWitnessReadingText(child, system, witnessResp)}${brackets[1]}`;
+            continue;
+        }
+
+        if (tagName === 'unclear') {
+            const unclearText = buildWitnessReadingText(child, system, witnessResp);
+            if (system === 'zaliznyak') {
+                result += `[${unclearText}]`;
+            } else {
+                result += applyDotBelowMarks(unclearText);
+            }
+            continue;
+        }
+
+        if (tagName === 'gap') {
+            result += system === 'zaliznyak' ? '...' : '***';
+            continue;
+        }
+
+        if (tagName === 'lb') {
+            result += '\n';
+            continue;
+        }
+
+        result += buildWitnessReadingText(child, system, witnessResp);
+    }
+
+    return result;
+}
+
+function normalizeWitnessReadingText(text) {
+    return text
+        .replace(/[ \t]+\n/g, '\n')
+        .replace(/\n[ \t]+/g, '\n')
+        .replace(/[ \t]{2,}/g, ' ')
+        .trim();
+}
+
+function formatReadingTextForHtml(text) {
+    return escapeHtml(text).replace(/\n/g, '<br>');
+}
+
+function buildReadingsRows(editionDiv, bibliographyMap, system, baseReaderLabel) {
+    let rows = '';
+    const witnesses = [null, ...collectWitnessRespValues(editionDiv)];
+
+    for (let i = 0; i < witnesses.length; i++) {
+        const witnessResp = witnesses[i];
+        const reader = witnessResp ? (resolveResp(witnessResp, bibliographyMap) || witnessResp) : baseReaderLabel;
+        const readingText = normalizeWitnessReadingText(buildWitnessReadingText(editionDiv, system, witnessResp));
+        if (!readingText) {
+            continue;
+        }
+
+        rows += `
+            <tr>
+                <td class="apparatus-lem-cell">${escapeHtml(reader)}</td>
+                <td class="apparatus-rdg-cell">${formatReadingTextForHtml(readingText)}</td>
+            </tr>`;
+    }
+
+    return rows;
+}
+
+function renderReadingsIntoContainer(container, xmlDoc, bibliographyMap, system) {
+    if (!container || !xmlDoc) {
+        return false;
+    }
+
+    const editionDiv = extractEditionDiv(xmlDoc);
+    if (!editionDiv) {
+        return false;
+    }
+
+    const appElements = editionDiv.getElementsByTagName('app');
+    if (appElements.length === 0) {
+        return false;
+    }
+
+    const baseReaderLabel = container.dataset.baseReaderLabel || 'Main reading';
+    const rows = buildReadingsRows(editionDiv, bibliographyMap, system, baseReaderLabel).trim();
+    if (!rows) {
+        return false;
+    }
+
+    const readerLabel = container.dataset.readerLabel || 'Reader';
+    const readingLabel = container.dataset.readingLabel || 'Reading';
+    container.innerHTML = `
+        <table class="apparatus-table">
+            <thead>
+                <tr>
+                    <th scope="col">${escapeHtml(readerLabel)}</th>
+                    <th scope="col">${escapeHtml(readingLabel)}</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${rows}
+            </tbody>
+        </table>`;
+
+    return true;
 }
 
 /**
