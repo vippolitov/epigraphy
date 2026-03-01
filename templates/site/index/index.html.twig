@@ -78,7 +78,7 @@
             {% set cities = inscription.carrier.discoverySite[0].cities %}
             
             {% if cities is not empty %}
-                {{- cities|map(city => city.name)|join(', ') -}}
+                {{- cities|map(city => localizedName(city, locale))|join(', ') -}}
             {% endif %}
         {% endif %}
     {% endif %}
@@ -91,7 +91,7 @@
     {% set sourceCategories = inscription.carrier.categories|map(category => category.name)|join(', ') %}
     {% if sourceCategories == 'стена церкви' %}
         {% if inscription.carrier is not null and inscription.carrier.discoverySite is not empty %}
-            {{- inscription.carrier.discoverySite[0].name -}}
+            {{- localizedName(inscription.carrier.discoverySite[0], locale) -}}
         {% else %}
             {{- categories -}}
         {% endif %}
