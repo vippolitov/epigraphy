@@ -15,14 +15,11 @@ fos_ck_editor:
         quoteplugin:
             path:     "/build/ckeditor/plugins/quoteplugin/"
             filename: "plugin.js"
-        bbcode:
-            path:     "/build/ckeditor/plugins/bbcode/"
-            filename: "plugin.js"
     default_config: common_config
     configs:
         common_config: &config
             versionCheck: false
-            extraPlugins: ["quoteplugin", "bbcode"]
+            extraPlugins: ["quoteplugin"]
             removePlugins: ["exportpdf", "easyimage", "cloudservices", "div", "divarea"]
             toolbar: [ [ 'Bold', 'Italic', 'Link', 'Quoteplugin', 'SpecialChar', 'RemoveFormat', 'Source' ] ]
             specialChars: [ '…', '–', '×', '«', '»', '“', '”', '‘', '’', 'ї', '', '|im.|', '|vac.|', 'Ѡ', 'Ѿ', 'Ѻ', 'Ꙩ', 'Ѧ', 'Ѩ', 'Ѫ', 'Ѭ', 'Ѣ', 'Ѯ', 'Ꙗ', 'Ꙋ', 'Ѳ', 'І', 'Є', 'Ѥ', 'Ѕ', 'Ѵ', 'Ѱ', 'Ꙑ', 'ѡ', 'ѿ', 'ѻ', 'ꙩ', 'ѧ', 'ѩ', 'ѫ', 'ѭ', 'ѣ', 'ѯ', 'ꙗ', 'ꙋ', 'ѳ', 'і', 'є', 'ѥ', 'ѕ', 'ѵ', 'ѱ', 'ꙑ', '⁙', '҂', '|', '¦', '⸗', '҃', '҇', '·', '→', '⃝' ]

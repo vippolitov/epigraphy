@@ -79,7 +79,7 @@ sonata_admin:
     child_admin_route: edit
   assets:
     extra_javascripts:
-      - build/ckeditor/ckeditor.js
+      - bundles/fosckeditor/ckeditor.js
       - 'build/js/admin/inscription/edit.js'
     extra_stylesheets:
       - 'build/css/admin/inscription/edit.css'
